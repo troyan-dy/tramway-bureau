@@ -2,6 +2,7 @@ import {RULES,newGame,advance,buildStop,setRoute,buyTram,setFare,routeQuote,rest
 import {cityMap} from './map.js';
 import {ico,LINE_COLORS,tramArt} from './graphics.js';
 import {soundSet,sound} from './sound.js';
+import {nextShiftAdvice,districtOrder} from './dispatch.js';
 const $=selector=>document.querySelector(selector);
 const SAVE='tram-bureau.shift.v1',RECORDS='tram-bureau.records.v1',OPTIONS='tram-bureau.options.v1';
 const TEXT={home:'Жилой квартал',work:'Место работы',leisure:'Место отдыха',hub:'Транспортный узел'};
@@ -30,7 +31,10 @@ function save(){
   const ok=write(SAVE,{game,speed,logs,begun,bestBefore});
   $('#save-status').textContent=ok?'Смена сохранена':'Файл сохранения доступен в меню';return ok;
 }
-function btn(action,label,cls='soft-button',icon='',extra=''){return '<button type="button" class="'+cls+'" data-action="'+action+'" '+extra+'>'+(icon?ico(icon):'')+label+'</button>'}
+function btn(action,label,cls='soft-button',icon='',extra=''){
+  const closed = game.ended && (['edit','build-mode','build-here','append-site','buy'].includes(action) || action.startsWith('fare-'));
+  return '<button type="button" class="'+cls+'" data-action="'+action+'" '+(closed?'disabled ':'')+extra+'>'+(icon?ico(icon):'')+label+'</button>';
+}
 function row(label,value){return '<div><span>'+label+'</span><b>'+value+'</b></div>'}
 function kicker(icon,text){return '<div class="card-kicker">'+ico(icon)+text+'</div>'}
 function display(id,html){
@@ -43,21 +47,40 @@ function display(id,html){
   if(id==='#panel')panelCache=html;else missionCache=html;
 }
 function phase(){const h=6+16*game.elapsed/game.duration;return h<10?'Утро':h<12?'До полудня':h<15?'Полдень':h<17?'День':h<20?'Вечерний пик':'Вечер'}
+function daytimeStop(){return game.sites[game.brief.site].name}
+let forecastCache='';
+function forecast(){
+  const hour=6+16*game.elapsed/game.duration;
+  const periods=[
+    [6,11,'Вокзал и предприятия','Из жилых кварталов'],
+    [12,15,daytimeStop(),'Сюда едут в полдень'],
+    [17,22,'Жилые кварталы','Обратный поток']
+  ];
+  const order=districtOrder(game);
+  const html='<div class="forecast-head">'+ico('flows')+'<h3>Прогноз спроса</h3></div><div class="forecast-list">'+periods.map(([from,to,title,detail])=>{
+    const active=hour>=from&&hour<to;
+    return '<div class="forecast-row'+(active?' current':'')+'"><time>'+String(from).padStart(2,'0')+'—'+to+'</time><i></i><div><b>'+escapeHTML(title)+'</b><small>'+detail+'</small></div></div>';
+  }).join('')+'</div><div class="district-order"><div class="order-title">'+ico('flag')+'<b>Поручение района</b><strong>'+Math.min(order.delivered,order.target)+' / '+order.target+'</strong></div><p>'+
+    (order.done?'Выполнено':'Дополнительная цель')+' · Привезти 8 пассажиров за смену к остановке «'+escapeHTML(order.name)+'».</p></div>';
+  if(html!==forecastCache){$('#forecast').innerHTML=html;forecastCache=html}
+}
 function mission(){
   const linked=game.lines.some(l=>l.trams&&l.stops.includes(2)), left=Math.max(0,game.target-game.stats.delivered);
   let body;
   if(game.ended)body='Смена окончена. Итоги и новый план города доступны в путевом листе.';
-  else if(!linked&&game.elapsed<game.duration*.25)body='До 22:00. Утром горожане едут на вокзал. Попробуйте продлить туда первую линию.';
-  else if(game.elapsed<game.duration*9/16&&game.elapsed>=game.duration*4/16)body='С 12 до 15 часов растёт спрос у остановки «'+game.brief.name+'».';
+  else if(!linked&&game.elapsed<game.duration*.25)body='Первый вагон ходит от Старого города до Рынка. Утром жители едут на вокзал.';
+  else if(game.elapsed<game.duration*9/16&&game.elapsed>=game.duration*4/16)body='С 12 до 15 часов растёт спрос у остановки «'+escapeHTML(daytimeStop())+'».';
   else if(!left)body='План выполнен. До конца смены можно улучшить свой результат.';
   else if(game.elapsed>game.duration*.67)body='Вечерний поток разворачивается к жилым кварталам. Проверьте очереди на карте.';
-  else body='До 22:00. Посадка с пересадкой считается одной поездкой после прибытия.';
+  else body='Поездка засчитывается, когда пассажир добрался до цели. Для пересадки нужна общая остановка.';
   let call=game.ended?btn('result','Итоги смены','start','ticket'):!running&&!ui.draft?btn('run',begun?'Продолжить смену':'Начать смену','start','play'):'<div class="progress"><span style="width:'+Math.min(100,Math.round(100*game.stats.delivered/game.target))+'%"></span></div>';
-  display('#mission',kicker('ticket','НАРЯД НА СМЕНУ')+'<h2>Доставить '+amt(game.target,['пассажира','пассажиров','пассажиров'])+'</h2><p>'+body+'</p>'+call);
+  if(!game.ended&&!begun&&!linked&&!ui.draft)call+=btn('guide','Продлить к вокзалу','mission-guide');
+  display('#mission',kicker('ticket','НАРЯД НА СМЕНУ')+'<h2>'+amt(game.target,['пассажир','пассажира','пассажиров'])+' до 22:00</h2><p>'+body+'</p>'+call);
 }
 function tabs(){
   $('#tab-network').setAttribute('aria-selected',ui.tab==='network');$('#tab-demand').setAttribute('aria-selected',ui.tab==='demand');
   $('#flow-toggle').setAttribute('aria-pressed',ui.flow);
+  $('#flow-key').hidden=!ui.flow;
 }
 function selector(){return '<div class="line-tabs" role="group" aria-label="Выбрать линию">'+game.lines.map(l=>btn('line-'+l.id,(l.stops.length?'':'＋ ')+'0'+(l.id+1),'line-tab '+(ui.line===l.id?'active ':'')+(l.stops.length?'':'empty'),'', 'style="--line:'+LINE_COLORS[l.id]+'" aria-label="Линия 0'+(l.id+1)+'" aria-pressed="'+(ui.line===l.id)+'"')).join('')+'</div>'}
 function depot(line){
@@ -90,9 +113,9 @@ function sitePanel(){
 function demandPanel(){
   const s=game.stats,waiting=game.people.filter(p=>p.state==='wait'),riding=game.people.filter(p=>p.state==='ride').length;
   const reasons=s.byReason,reasonCount=Object.keys(reasons).sort((a,b)=>reasons[b]-reasons[a])[0];
-  const messages={unconnected:'Нет удобной связи между районами.',slow:'Пешком выходит быстрее. Добавьте вагон или сократите объезд.',expensive:'Дорого ехать. Проверьте спрос с более дешёвым билетом.',crowded:'Вагон заполнен. Поможет дополнительный рейс.'};
+  const messages={unconnected:'Нет удобной связи между районами.',slow:'Пешком выходит быстрее. Добавьте вагон или сократите объезд.',expensive:'Дорого ехать. Проверьте спрос с более дешёвым билетом.',crowded:'В нужном вагоне не хватило мест. Поможет дополнительный рейс.',waiting:'Жители устали ждать отправления. Сократите интервал между вагонами.',legacyWait:'Жители долго ждали. Так записано в прежнем сохранении.'};
   const list=game.sites.map(s=>({s,n:game.people.filter(p=>p.dest===s.id).length})).sort((a,b)=>b.n-a.n).slice(0,3);
-  return '<div class="section-title"><h3>Пассажиропоток</h3></div><p class="minor">'+phase()+' · '+(game.elapsed<game.duration*.56?'Дневной спрос — '+game.brief.name:'К вечеру поток смещается домой')+'</p><div class="stat-list">'+row('Ждут / в вагонах',waiting.length+' / '+riding)+row('Завершили путь пешком',s.walked)+row('Сделали пересадку',s.transfers)+'</div><hr class="section-sep"><div class="caption">КУДА ЕДУТ И ИДУТ СЕЙЧАС</div>'+list.map(({s,n})=>'<div class="flow-row">'+btn('inspect-'+s.id,s.name,'')+'<b>'+n+'</b></div>').join('')+'<hr class="section-sep"><div class="caption">ПОЧЕМУ ИДУТ ПЕШКОМ</div><p class="context-note">'+(reasons[reasonCount]?messages[reasonCount]:'Здесь появится причина выбора жителей.')+'</p><p class="minor">Нажмите на пешехода на карте, чтобы увидеть его путь.</p>'
+  return '<div class="section-title"><h3>Пассажиропоток</h3></div><p class="minor">'+phase()+' · '+(game.elapsed<game.duration*.56?'Дневной спрос — '+daytimeStop():'К вечеру поток смещается домой')+'</p><div class="stat-list">'+row('Ждут / в вагонах',waiting.length+' / '+riding)+row('Завершили путь пешком',s.walked)+row('Сделали пересадку',s.transfers)+'</div><hr class="section-sep"><div class="caption">КУДА ЕДУТ И ИДУТ СЕЙЧАС</div>'+list.map(({s,n})=>'<div class="flow-row">'+btn('inspect-'+s.id,s.name,'')+'<b>'+n+'</b></div>').join('')+'<hr class="section-sep"><div class="caption">ПОЧЕМУ ИДУТ ПЕШКОМ · ЗА СМЕНУ</div><p class="context-note">'+(reasons[reasonCount]?messages[reasonCount]:'Здесь появится причина выбора жителей.')+'</p><p class="minor">Стрелки показывают частые направления. Число на стрелке — жители в пути. Нажмите на пешехода, чтобы увидеть его поездку.</p>'
 }
 function personPanel(){
   const living=game.people.find(p=>p.id===ui.person),p=living||ui.selectedPerson;if(!p)return demandPanel();if(living)ui.selectedPerson={...living};
@@ -106,6 +129,16 @@ function panel(){
   else html=ui.tab==='network'?networkPanel():demandPanel();
   display('#panel',html);
   const tip=$('#map-tip');tip.hidden=!['edit','build'].includes(ui.mode);tip.textContent=ui.mode==='build'?'Выберите место со знаком «+»':'Линия 0'+(ui.line+1)+' · нажимайте на места по порядку';
+  const strip=$('#map-edit-bar');
+  strip.hidden=ui.mode!=='edit';
+  if(ui.mode==='edit'){
+    const price=draftInfo().total;
+    const canApply=Number.isFinite(price)&&game.cash>=price&&ui.draft.join(',')!==game.lines[ui.line].stops.join(',');
+    const html='<span>Линия 0'+(ui.line+1)+' · '+stops(ui.draft.length)+'</span>'+
+      btn('map-apply',Number.isFinite(price)?'Применить · '+money(price):'Выберите места','primary','',canApply?'':'disabled')+
+      btn('map-abort','Отмена','quiet');
+    if(strip.innerHTML!==html)strip.innerHTML=html;
+  }
 }
 function header(){
   $('#cash').textContent=money(game.cash);$('#delivered').textContent=game.stats.delivered;$('#target').textContent=' / '+game.target;
@@ -114,11 +147,14 @@ function header(){
   if(prevStamp!==text){prevStamp=text;$('#play').innerHTML=ico(running?'pause':game.ended?'ticket':'play');$('#play').title=text+' · Пробел';$('#play').setAttribute('aria-label',text)}
   $('#map-code').textContent='ЛИСТ № '+game.seed;
 }
-function refresh(){header();mission();panel();map?.paint(true)}
+function refresh(){header();mission();panel();forecast();map?.paint(true)}
 function clearSelection(){Object.assign(ui,{site:null,person:null,selectedPerson:null,draft:null,mode:'overview'})}
 function planning(){running=false;lastMoment=null}
+function jumpTo(where){
+  if(innerWidth<=800)$(where==='map'?'.overview':'.controls').scrollIntoView({block:'start',behavior:'smooth'});
+}
 function onSite(id){
-  if(modal||game.ended)return;
+  if(modal)return;
   if(ui.mode==='edit'){
     if(ui.draft.includes(id)){toast('Место уже в маршруте. Уберите его крестиком в списке.');return}
     ui.draft.push(id);sound('button');refresh();return;
@@ -127,13 +163,13 @@ function onSite(id){
   const wasBuild=ui.mode==='build';clearSelection();ui.mode='site';ui.site=id;
   if(wasBuild)planning();
   refresh();
-  if(wasBuild&&innerWidth<=800)$('#panel').scrollIntoView({behavior:'smooth',block:'nearest'})
+  jumpTo('panel')
 }
-function onPerson(id){clearSelection();ui.person=id;ui.mode='person';ui.tab='demand';ui.flow=true;refresh()}
+function onPerson(id){clearSelection();ui.person=id;ui.mode='person';ui.tab='demand';ui.flow=true;refresh();jumpTo('panel')}
 function edit(append=null){
   planning();clearSelection();ui.tab='network';ui.mode='edit';ui.draft=[...game.lines[ui.line].stops];
   if(append!==null&&!ui.draft.includes(append))ui.draft.push(append);
-  refresh();if(innerWidth<=800)$('#map-window').scrollIntoView({block:'center',behavior:'smooth'})
+  refresh();jumpTo('map')
 }
 function commitDraft(){
   const price=draftInfo(),candidate=restoreGame(game);if(!candidate||!Number.isFinite(price.total)||price.total>game.cash){toast('Не удалось применить маршрут');return}
@@ -146,45 +182,47 @@ function run(){
   if(game.ended){openModal('result');return}
   if(modal||ui.draft){toast('Завершите редактирование маршрута');return}
   running=!running;lastMoment=null;
-  if(running){if(!begun){begun=true;log('Начало смены. Первый вагон на линии.')}sound('start')}
+  if(running){if(!begun){begun=true;log('Начало смены. Первый вагон на линии.')}sound('start');jumpTo('map')}
   else save();
   refresh()
 }
 function changeSpeed(){speed=({1:2,2:4,4:1})[speed];save();refresh();toast('Скорость времени · '+speed+'×')}
 function action(key){
   if(key==='run'){run();return}if(key==='result'){openModal('result');return}
-  if(key==='cancel'){clearSelection();refresh();return}
+  if(key==='jump-map'||key==='jump-panel'){jumpTo(key==='jump-map'?'map':'panel');return}
+  if(key==='cancel'||key==='map-abort'){clearSelection();refresh();return}
+  if(key.startsWith('line-')){clearSelection();ui.line=Number(key.slice(5));refresh();return}
+  if(key.startsWith('inspect-')){onSite(Number(key.slice(8)));return}
   if(game.ended)return;
-  if(key==='edit'){edit();return}if(key==='commit'){commitDraft();return}
-  if(key==='build-mode'){planning();clearSelection();ui.mode='build';refresh();if(innerWidth<=800)$('#map-window').scrollIntoView({block:'center',behavior:'smooth'});return}
+  if(key==='guide'){ui.line=0;edit();toast('Нажмите «Вокзал» на карте, затем «Применить».');return}
+  if(key==='edit'){edit();return}if(key==='commit'||key==='map-apply'){commitDraft();return}
+  if(key==='build-mode'){planning();clearSelection();ui.mode='build';refresh();jumpTo('map');return}
   if(key==='append-site'){edit(ui.site);return}
   if(key==='build-here'){const r=buildStop(game,ui.site);if(r.ok){log('Открыта остановка «'+game.sites[ui.site].name+'» за '+money(RULES.stopCost)+'.');sound('build');save()}toast(r.message);refresh();return}
   if(key==='buy'){const r=buyTram(game,ui.line);if(r.ok){log('Линия 0'+(ui.line+1)+' получила новый вагон на '+RULES.capacity+' мест.');sound('bell');save()}toast(r.message);refresh();return}
   const [act,raw]=key.split('-'),n=Number(raw);
-  if(act==='line'){clearSelection();ui.line=n}
   if(act==='fare'){if(game.fare===n)return;const r=setFare(game,n);if(r.ok){log('Единый билет теперь стоит '+money(n)+'.');sound('button');save()}}
   if(act==='drop'){ui.draft.splice(n,1)}
-  if(act==='inspect'){onSite(n);return}
   // Keep all ordinary clicks on the same render path.
   refresh()
 }
 
 function resultMarkup(){
-  const s=game.stats, achieved=game.won;
+  const s=game.stats, achieved=game.won, order=districtOrder(game);
   let last=0;const data=[];
   for(let i=1;i<=8;i++){
     const sample=game.history.filter(h=>h.elapsed<=game.duration*i/8+.02).at(-1);
     const total=i===8?s.delivered:sample?.delivered||0;data.push(total-last);last=total;
   }
   const peak=Math.max(1,...data);
-  const bars='<div class="chart" aria-label="Прибытия по двухчасовым периодам">'+data.map((n,i)=>'<div title="'+(6+2*i)+':00–'+(8+2*i)+':00 · '+n+'"><b>'+n+'</b><i style="height:'+Math.max(2,37*n/peak)+'px"></i><small>'+String(6+i*2).padStart(2,'0')+'</small></div>').join('')+'</div>';
-  return '<div class="report-strip">'+kicker('ticket','ПУТЕВОЙ ЛИСТ · 22:00')+'<h2>'+(achieved?'План выполнен':'Смена окончена')+'</h2><p>'+(achieved?'Последний трамвай вернулся в депо.':'До плана не хватило '+amt(game.target-s.delivered,['поездки','поездок','поездок'])+'.')+'</p></div><div class="dialog-inner"><div class="report-numbers"><div><b>'+s.delivered+' / '+game.target+'</b><small>Доставлено</small></div><div><b>'+money(s.revenue)+'</b><small>Выручка</small></div><div><b>'+s.transfers+'</b><small>Пересадки</small></div></div><div class="caption">ПРИБЫТИЯ ПО ВРЕМЕНИ СУТОК</div>'+bars+
-    '<p class="minor">'+(bestBefore?'Прошлый рекорд на этом плане — '+bestBefore+'. ':'Это первая смена на этом плане. ')+(achieved?'Попробуйте превзойти результат другой сетью.':'Начните с продления к вокзалу и проверьте, как второй вагон меняет поток.')+'</p><div class="action-row">'+btn('same','Повторить карту','primary','repeat')+btn('new','Другой район','soft-button','map')+'</div>'+btn('close','Посмотреть сеть','quiet fullbtn','back')+'</div>'
+  const bars='<div class="chart" aria-label="Прибытия по двухчасовым периодам">'+data.map((n,i)=>'<div title="'+(6+2*i)+':00–'+(8+2*i)+':00 · '+n+'"><b>'+n+'</b><i style="height:'+(n?Math.max(2,37*n/peak):0)+'px"></i><small>'+String(6+i*2).padStart(2,'0')+'</small></div>').join('')+'</div>';
+  return '<div class="report-strip">'+kicker('ticket','ПУТЕВОЙ ЛИСТ · 22:00')+'<h2>'+(achieved?'План выполнен':'Смена окончена')+'</h2><p>'+(achieved?'Последний трамвай вернулся в депо.':'До плана не хватило '+(game.target-s.delivered===1?'одной поездки':amt(game.target-s.delivered,['поездки','поездок','поездок']))+'.')+'</p></div><div class="dialog-inner"><div class="report-numbers"><div><b>'+s.delivered+' / '+game.target+'</b><small>Доставлено</small></div><div><b>'+money(s.revenue)+'</b><small>Выручка</small></div><div><b>'+s.transfers+'</b><small>Пересадки</small></div></div><div class="caption">ПРИБЫТИЯ ПО ВРЕМЕНИ СУТОК</div>'+bars+
+    '<div class="report-order">'+ico('flag')+'<span>Поручение района · «'+escapeHTML(order.name)+'»<br><b>'+(order.done?'Выполнено':'Не выполнено')+' · '+order.delivered+' из '+order.target+'</b></span></div><p class="minor">'+(bestBefore?'Прошлый рекорд на этом плане — '+bestBefore+'. ':'Это первая смена на этом плане. ')+nextShiftAdvice(game)+'</p><div class="action-row">'+btn('same','Повторить карту','primary','repeat')+btn('new','Другой район','soft-button','map')+'</div>'+btn('close','Посмотреть сеть','quiet fullbtn','back')+'</div>'
 }
 function dialogBody(type){
   const head=(title,icon='ticket')=>'<div class="dialog-inner"><div class="dialog-top"><div class="eyebrow">'+ico(icon)+' ТРАМВАЙНОЕ БЮРО</div>'+btn('close','×','quiet','','aria-label="Закрыть"')+'</div><h2 class="dialog-title">'+title+'</h2>';
   if(type==='result')return resultMarkup();
-  if(type==='help')return head('Как провести смену','help')+'<p>С 06:00 до 22:00 доставьте '+game.target+' жителей. Засчитывается прибытие к цели после поездки на трамвае.</p><ol><li><b>Продлите первую линию.</b> Нажмите «Изменить», выберите Вокзал на карте и примените маршрут. Цена включает остановку и новые рельсы.</li><li><b>Выпустите вагон.</b> В строке «Вагоны» кнопка «+ '+money(RULES.tramCost)+'» добавляет вагон к выбранной линии. Вагоны разворачиваются на конечных.</li><li><b>Начните смену.</b> Слой «Потоки» показывает очереди. Выберите жителя или место, чтобы узнать направление. Утром популярен вокзал, вечером — жилые кварталы.</li><li><b>Настройте сеть.</b> Общая остановка связывает линии пересадкой. За поездку с пересадкой действует один билет. Высокий тариф увеличивает кассу, но часть жителей предпочтёт прогулку.</li></ol><p class="fine">Пробел — пуск и пауза. Клавиши 1, 2 и 3 — скорость 1×, 2× и 4×. На увеличенной карте потяните улицу для обзора. Смена сохраняется автоматически.</p>'+btn('close','К пульту','primary fullbtn','next')+'</div>';
+  if(type==='help')return head('Как провести смену','help')+'<p>С 06:00 до 22:00 доставьте '+game.target+' жителей. Засчитывается прибытие к цели после поездки на трамвае.</p><ol><li><b>Продлите первую линию.</b> Нажмите «Изменить», выберите Вокзал на карте и примените маршрут. Цена включает остановку и новые рельсы.</li><li><b>Выпустите вагон.</b> В строке «Вагоны» кнопка «+ '+money(RULES.tramCost)+'» добавляет вагон к выбранной линии. Вагоны разворачиваются на конечных.</li><li><b>Начните смену.</b> Слой «Потоки» показывает очереди и стрелки трёх самых частых направлений среди жителей в пути. Выберите жителя или место, чтобы узнать направление. Утром популярен вокзал, вечером — жилые кварталы.</li><li><b>Настройте сеть.</b> Общая остановка связывает линии пересадкой. За поездку с пересадкой действует один билет. Высокий тариф увеличивает кассу, но часть жителей предпочтёт прогулку.</li></ol><p class="fine">Пробел — пуск и пауза. Клавиши 1, 2 и 3 — скорость 1×, 2× и 4×. На увеличенной карте потяните улицу для обзора. Смена сохраняется автоматически.</p>'+btn('close','К пульту','primary fullbtn','next')+'</div>';
   if(type==='menu')return head('Меню смены','menu')+'<p>План № '+game.seed+' · '+clock()+' · '+(game.stats.delivered)+' из '+game.target+' доставлено</p>'+btn('close','Вернуться на карту','primary fullbtn','back')+btn('download','Скачать сохранение','soft-button fullbtn','save')+btn('import','Открыть файл сохранения','soft-button fullbtn','file')+'<hr class="section-sep">'+btn('restart-same','Начать заново на этой карте','soft-button fullbtn','repeat')+btn('restart-new','Начать в другом районе','soft-button fullbtn','map')+'<p class="fine">Лучший результат этого плана — '+Number(records[game.seed]||0)+'. Игра сохраняется в этом браузере. Файл позволяет перенести смену.</p></div>';
   if(type==='confirm-same'||type==='confirm-new')return head('Открыть новую смену?')+'<p>Текущая смена будет заменена. Её можно скачать в меню. '+(type==='confirm-same'?'Улицы и спрос повторятся.':'Изменятся расположение кварталов и дневной спрос.')+'</p><div class="action-row">'+btn(type==='confirm-same'?'same':'new','Начать смену','primary','repeat')+btn('menu','Назад')+'</div></div>';
   return head('Журнал смены','radio')+(logs.length?[...logs].reverse().map(e=>'<div class="entry"><time>'+escapeHTML(e.time)+'</time><p>'+escapeHTML(e.message)+'</p></div>').join(''):'<p>Записи появятся после первого распоряжения.</p>')+'</div>';
@@ -239,14 +277,23 @@ function eventHour(){
   const h=Math.min(22,Math.floor(6+16*game.elapsed/game.duration));
   if(h===sector)return;const was=sector;sector=h;if(was===-1)return;
   if([10,14,18].includes(h))log('Город перечислил субсидию на сеть · '+money(RULES.grant)+'.');
-  if(h===12)log('Полдень. Ожидается наплыв у остановки «'+game.brief.name+'».');
+  if(h===12)log('Полдень. Ожидается наплыв у остановки «'+daytimeStop()+'».');
   if(h===17)log('Начинается вечерний пик. Горожане возвращаются домой.')
 }
 let repaint=0,refreshAt=0;
 function frame(time){
   if(running&&!document.hidden){
     const dt=lastMoment===null?0:Math.min((time-lastMoment)/1000,.3);lastMoment=time;
+    const firstDelivery=game.stats.delivered===0, orderBefore=districtOrder(game).done;
     if(dt>0)advance(game,dt*speed);
+    if(firstDelivery&&game.stats.delivered>0){
+      const message='Первая поездка завершена. Бюро получило плату за билет.';
+      log(message);toast(message);sound('bell');
+    }
+    if(!orderBefore&&districtOrder(game).done){
+      const message='Поручение района выполнено · «'+daytimeStop()+'».';
+      log(message);toast(message);sound('bell');
+    }
     eventHour();if(game.ended)finish();
     else {
       if(game.elapsed-musicAt>7){musicAt=game.elapsed;sound('tick')}

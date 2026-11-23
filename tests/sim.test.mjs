@@ -108,3 +108,59 @@ test('fare, added service and replay produce distinguishable shift outcomes', ()
   assert.ok(cheap.delivered > idle.stats.delivered * 2);
   assert.deepEqual(cheap, play(1));
 });
+
+test('a full tram only explains a timeout on the requested line and in the requested direction', () => {
+  const g = newGame();
+  extend(g);
+  assert.ok(setRoute(g, 1, [0, 1, 2]).ok);
+  g.nextSpawn = g.duration;
+  const origin = g.people.find(p => p.at === 0 && p.state === 'wait');
+  const market = g.people.find(p => p.at === 1 && p.state === 'wait');
+  function passenger(template, id, dest, line = 0) {
+    return { ...template, id, dest, to: dest, line, legs: [{ line, from: template.at, to: dest }] };
+  }
+  const through = Array.from({ length: RULES.capacity }, (_, i) => passenger(origin, i + 1, 2));
+  const full = passenger(origin, through.length + 1, 1);
+  const opposite = passenger(market, full.id + 1, 0);
+  const otherLine = passenger(origin, opposite.id + 1, 1, 1);
+  g.people = [...through, full, opposite, otherLine];
+  g.nextId = otherLine.id + 1;
+  g.stats.spawned = g.people.length;
+  advance(g, 11);
+  assert.equal(g.vehicles[0].load, RULES.capacity);
+  assert.equal(full.missedFullTram, true);
+  assert.equal(opposite.missedFullTram, false);
+  assert.equal(otherLine.missedFullTram, false);
+  const resumed = restoreGame(g);
+  assert.deepEqual(resumed, g);
+  for (const game of [g, resumed]) {
+    advance(game, 18);
+    assert.equal(game.stats.abandoned, 3);
+    assert.equal(game.stats.byReason.crowded, 1);
+    assert.equal(game.stats.byReason.waiting, 2);
+    assert.equal(game.stats.byReason.legacyWait, 0);
+    conserved(game);
+  }
+});
+
+test('old v1 wait statistics stay unattributed when their evidence is missing', () => {
+  const g = newGame();
+  extend(g);
+  advance(g, 100);
+  const reasons = g.stats.byReason;
+  const total = reasons.crowded + reasons.waiting;
+  assert.ok(total > 0);
+  reasons.crowded = total;
+  delete reasons.waiting;
+  delete reasons.legacyWait;
+  for (const p of g.people) delete p.missedFullTram;
+  const migrated = restoreGame(g);
+  assert.ok(migrated);
+  assert.equal(migrated.stats.byReason.legacyWait, total);
+  assert.equal(migrated.stats.byReason.crowded, 0);
+  assert.equal(migrated.stats.byReason.waiting, 0);
+  for (const p of migrated.people) assert.equal(p.missedFullTram, p.state === 'wait' ? null : false);
+  assert.deepEqual(restoreGame(migrated), migrated);
+  advance(migrated, migrated.duration);
+  conserved(migrated);
+});

@@ -198,6 +198,7 @@ function waitAt(g, p, at) {
   p.state = 'wait';
   p.at = at;
   p.waitSince = g.elapsed;
+  p.missedFullTram = false;
   p.vehicle = -1;
   p.line = p.legs[0].line;
   // Stable offsets keep the queue visible and avoid people jittering per frame.
@@ -260,7 +261,7 @@ function spawn(g, trip = demand(g), alreadyAtPlatform = false) {
   const p = {
     id: g.nextId++, origin, dest, state: 'walk', at: origin, to: dest,
     x: 0, y: 0, along: 0, line: -1, vehicle: -1, reason: '', legs: [],
-    boardings: 0, lastLine: -1, paidFare: 0, waitSince: 0,
+    boardings: 0, lastLine: -1, paidFare: 0, waitSince: 0, missedFullTram: false,
     sensitivity: 2 + random(g) ** 2 * 18,
     stride: 0.85 + random(g) * 0.30,
   };
@@ -338,15 +339,18 @@ function arrive(g, v) {
 function board(g, v) {
   const ids = g.lines[v.line].stops;
   const fromIndex = ids.indexOf(v.from);
-  if (fromIndex < 0) return;
-  const departDir = Math.sign(ids.indexOf(v.to) - fromIndex);
-  if (!departDir) return;
+  const nextIndex = ids.indexOf(v.to);
+  if (fromIndex < 0 || nextIndex < 0 || Math.abs(nextIndex - fromIndex) !== 1) return;
+  const departDir = Math.sign(nextIndex - fromIndex);
   const waiting = g.people.filter(p => p.state === 'wait' && p.at === v.from && p.line === v.line);
   waiting.sort((a, b) => a.waitSince - b.waitSince || a.id - b.id);
   for (const p of waiting) {
-    if (v.load >= v.capacity) break;
     const targetIndex = ids.indexOf(p.legs[0].to);
     if (targetIndex < 0 || Math.sign(targetIndex - fromIndex) !== departDir) continue;
+    if (v.load >= v.capacity) {
+      p.missedFullTram = true;
+      continue;
+    }
     if (p.boardings === 0) p.paidFare = g.fare;
     else if (p.lastLine !== v.line) g.stats.transfers++;
     p.state = 'ride';
@@ -428,8 +432,15 @@ function updateWaiting(g) {
   for (const p of g.people) {
     if (p.state === 'wait') {
       const since = p.waitSince;
+      const oldLeg = p.legs[0], missed = p.missedFullTram;
       decideJourney(g, p, p.at);
-      if (p.state === 'wait') p.waitSince = since;
+      if (p.state === 'wait') {
+        p.waitSince = since;
+        const leg = p.legs[0];
+        if (leg.line === oldLeg.line && leg.from === oldLeg.from && leg.to === oldLeg.to) {
+          p.missedFullTram = missed;
+        }
+      }
     }
   }
 }
@@ -503,8 +514,9 @@ function movePerson(g, p) {
     const patience = Math.max(28, road(g, p.at, p.dest).length / WALK_SPEED * .92);
     if (g.elapsed - p.waitSince > patience) {
       g.stats.abandoned++;
-      g.stats.byReason.crowded++;
-      p.reason = 'Долго ждал и пошёл пешком';
+      const key = p.missedFullTram === null ? 'legacyWait' : p.missedFullTram ? 'crowded' : 'waiting';
+      g.stats.byReason[key]++;
+      p.reason = p.missedFullTram ? 'В полном вагоне не хватило места' : 'Долго ждал и пошёл пешком';
       p.legs = [];
       beginWalk(g, p, p.boardings ? 'exit' : 'walk', p.at, p.dest);
     }
@@ -580,7 +592,7 @@ export function newGame(seed = 1874) {
       peakQueue: 0, abandoned: 0, grants: 0,
       bySite: sites.map(() => ({ tram: 0, walk: 0 })),
       byLine: lines.map(() => ({ boarded: 0, delivered: 0 })),
-      byReason: { unconnected: 0, slow: 0, expensive: 0, crowded: 0 },
+      byReason: { unconnected: 0, slow: 0, expensive: 0, crowded: 0, waiting: 0, legacyWait: 0 },
     },
   };
   const site = choose(g, [1, 5, 8, 9]);
@@ -626,6 +638,7 @@ function validSave(g) {
     p && nat(p.id) && p.id < g.nextId && validSite(p.origin) && validSite(p.dest) && validSite(p.at) && validSite(p.to) &&
     ['walk', 'approach', 'wait', 'ride', 'exit'].includes(p.state) &&
     [p.x, p.y, p.along, p.waitSince, p.stride, p.sensitivity].every(num) && nat(p.boardings) &&
+    (typeof p.missedFullTram === 'boolean' || p.missedFullTram === null) &&
     (!p.boardings || lineExists(g, p.lastLine)) && nat(p.paidFare) &&
     Array.isArray(p.legs) && p.legs.every(l => lineExists(g, l.line) && validSite(l.from) && validSite(l.to)) &&
     (!['approach', 'ride', 'wait'].includes(p.state) || p.legs.length && lineExists(g, p.line)) &&
@@ -637,7 +650,8 @@ function validSave(g) {
     s.spawned === g.people.length + s.walked + s.delivered &&
     s.bySite?.length === g.sites.length && s.bySite.every(v => nat(v.tram) && nat(v.walk)) &&
     s.byLine?.length === g.lines.length && s.byLine.every(v => nat(v.boarded) && nat(v.delivered)) &&
-    [s.byReason?.unconnected, s.byReason?.slow, s.byReason?.expensive, s.byReason?.crowded].every(nat) &&
+    [s.byReason?.unconnected, s.byReason?.slow, s.byReason?.expensive, s.byReason?.crowded,
+      s.byReason?.waiting, s.byReason?.legacyWait].every(nat) &&
     Array.isArray(g.history) && g.history.length > 0 && g.history.every(h => num(h.elapsed) &&
       [h.delivered, h.walked, h.revenue, h.waiting].every(nat));
 }
@@ -645,6 +659,15 @@ function validSave(g) {
 export function restoreGame(data) {
   try {
     const g = JSON.parse(typeof data === 'string' ? data : JSON.stringify(data));
+    // Earlier v1 snapshots counted all queue timeouts as "crowded" and did not
+    // record whether a particular passenger had actually seen a full tram.
+    const reasons = g?.stats?.byReason;
+    if (g?.version === 1 && reasons && reasons.waiting === undefined) {
+      reasons.legacyWait = reasons.crowded;
+      reasons.crowded = 0;
+      reasons.waiting = 0;
+      for (const p of g.people) p.missedFullTram = p.state === 'wait' ? null : false;
+    }
     if (!validSave(g)) return null;
     g.brief.name = g.sites[g.brief.site].name;
     return g;

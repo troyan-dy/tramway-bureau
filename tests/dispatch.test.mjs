@@ -1,7 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {nextShiftAdvice, districtOrder} from '../src/dispatch.js';
+import {nextShiftAdvice, districtOrder, shiftRecords} from '../src/dispatch.js';
 import {newGame, buildStop, setRoute, buyTram, setFare, advance} from '../src/sim.js';
+
+test('importing and reopening a completed shift preserves both the record and its predecessor', () => {
+  const final = {ended:true, stats:{delivered:101}};
+  assert.deepEqual(shiftRecords(final, undefined, 64), {previous:64, record:101});
+  assert.deepEqual(shiftRecords(final, 120, 64), {previous:120, record:120});
+  assert.deepEqual(shiftRecords(final, 80, 88), {previous:88, record:101});
+  assert.deepEqual(shiftRecords(final, 101, 64, 80), {previous:80, record:101});
+  assert.deepEqual(shiftRecords(final, 101, 0, 0), {previous:0, record:101});
+  assert.deepEqual(shiftRecords(final, 0, 'invalid', 0), {previous:0, record:101});
+  const partial = {ended:false, stats:{delivered:101}};
+  assert.deepEqual(shiftRecords(partial, 24, 64), {previous:64, record:24});
+});
 
 test('an expensive two-car station line gets a relevant suggestion after a near miss', () => {
   const g = newGame(1874);

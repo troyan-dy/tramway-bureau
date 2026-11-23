@@ -2,7 +2,7 @@ import {RULES,newGame,advance,buildStop,setRoute,buyTram,setFare,routeQuote,rest
 import {cityMap} from './map.js';
 import {ico,LINE_COLORS,tramArt} from './graphics.js';
 import {soundSet,sound} from './sound.js';
-import {nextShiftAdvice,districtOrder} from './dispatch.js';
+import {nextShiftAdvice,districtOrder,shiftRecords} from './dispatch.js';
 const $=selector=>document.querySelector(selector);
 const SAVE='tram-bureau.shift.v1',RECORDS='tram-bureau.records.v1',OPTIONS='tram-bureau.options.v1';
 const TEXT={home:'Жилой квартал',work:'Место работы',leisure:'Место отдыха',hub:'Транспортный узел'};
@@ -15,7 +15,15 @@ const saved=read(SAVE),loaded=restoreGame(saved?.game);
 let game=loaded||newGame(1874), running=false,speed=[1,2,4].includes(saved?.speed)?saved.speed:1,soundOn=false;
 const opts=read(OPTIONS)||{}, records=read(RECORDS)||{};
 let logs=loaded&&Array.isArray(saved?.logs)?saved.logs.filter(v=>typeof v?.message==='string'&&typeof v.time==='string').slice(-70):[];
-let bestBefore=loaded&&Number.isFinite(saved?.bestBefore)?saved.bestBefore:Number(records[game.seed]||0);
+function restoreRecord(previous, sameReportPrevious) {
+  const score = shiftRecords(game, records[game.seed], previous, sameReportPrevious);
+  if (game.ended && records[game.seed] !== score.record) {
+    records[game.seed] = score.record;
+    write(RECORDS, records);
+  }
+  return score.previous;
+}
+let bestBefore=restoreRecord(loaded ? saved.bestBefore : 0, loaded?.ended ? 0 : undefined);
 let begun=!!(loaded&&(saved.begun||game.elapsed>0)), modal='', clickedStart=false;
 const ui={tab:'network',line:0,mode:'overview',site:null,person:null,draft:null,flow:false,selectedPerson:null};
 let map,toastTimer,prevStamp='',missionCache='',panelCache='',persistAt=0,lastMoment=null,sector=-1, musicAt=0;
@@ -253,9 +261,11 @@ function importSave(){
     try{const file=input.files[0];if(!file)return;if(file.size>4_000_000)throw Error();
       const data=JSON.parse(await file.text()),model=restoreGame(data.game);
       if(data.format!=='tram-bureau'||!model)throw Error();
+      const sameReport = game.ended && model.ended && JSON.stringify(model) === JSON.stringify(game);
+      const prior = sameReport ? bestBefore : undefined;
       closeModal(false);game=model;speed=[1,2,4].includes(data.speed)?data.speed:1;
       logs=Array.isArray(data.logs)?data.logs.filter(l=>typeof l?.message==='string'&&typeof l.time==='string').slice(-70):[];
-      begun=!!data.begun||game.elapsed>0;bestBefore=Number(records[game.seed]||0);
+      begun=!!data.begun||game.elapsed>0;bestBefore=restoreRecord(data.bestBefore, prior);
       clearSelection();ui.line=0;ui.tab='network';sector=Math.floor(game.elapsed/game.duration*16)+6;musicAt=game.elapsed;
       log('Смена восстановлена из файла.');map.reset();save();refresh();if(game.ended)openModal('result');else toast('Смена восстановлена на паузе');
     }catch{toast('Не удалось прочитать сохранение «Трамвайного бюро».')}
@@ -270,7 +280,7 @@ function dialogAction(key){
 }
 function finish(){
   planning();log(game.won?'План перевозок выполнен. Смена закрыта.':'Движение закрыто. Путевой лист передан в бюро.');
-  records[game.seed]=Math.max(Number(records[game.seed]||0),game.stats.delivered);write(RECORDS,records);
+  bestBefore=restoreRecord(bestBefore);
   sound('finish');save();refresh();openModal('result')
 }
 function eventHour(){

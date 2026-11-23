@@ -1,3 +1,15 @@
+const validScore = n => Number.isSafeInteger(n) && n >= 0 ? n : 0;
+
+export function shiftRecords(game, localRecord, savedPrevious, sameReportPrevious) {
+  const local = validScore(localRecord);
+  const score = game.stats.delivered;
+  // Loading the same result again must not present its own score as the
+  // record held before the shift. Another, higher local record still counts.
+  const reopening = sameReportPrevious !== undefined && game.ended && local === score;
+  const previous = Math.max(validScore(savedPrevious), validScore(sameReportPrevious), reopening ? 0 : local);
+  return { previous, record: game.ended ? Math.max(previous, local, score) : local };
+}
+
 export function busiestTrips(game) {
   const trips = new Map();
   for (const {origin, dest} of game.people) {

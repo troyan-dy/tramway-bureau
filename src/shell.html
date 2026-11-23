@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#173b39"><title>Трамвайное бюро · Приморск</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23173b39'/%3E%3Cpath d='M8 11h16v12H8zm3-4h10m-9 18-3 4m11-4 3 4' fill='none' stroke='%23f7e5ac' stroke-width='2.5'/%3E%3C/svg%3E">
+<!-- STYLE -->
+</head>
+<body>
+<header class="mast"><div class="mast-in">
+<div class="brand"><span class="brand-symbol" data-icon="brand"></span><span>Трамвайное бюро</span></div>
+<span class="mast-divider"></span><span class="mast-sub">Служба городских линий</span>
+<nav aria-label="Настройки"><button id="sound" class="head-btn" title="Включить звук" aria-label="Включить звук"></button><button id="help" class="head-btn" aria-label="Как играть"><i data-icon="help"></i><span>Как играть</span></button><button id="menu" class="head-btn" aria-label="Меню смены" title="Меню смены"><i data-icon="menu"></i></button></nav>
+</div></header>
+<main>
+<section class="overview" aria-label="Сведения о смене">
+<div class="city-title"><div class="eyebrow"><span class="dot orange"></span>ДИСПЕТЧЕРСКАЯ</div><h1>Приморск</h1></div>
+<div class="instruments">
+<div class="instrument"><span class="instrument-icon"><i data-icon="wallet"></i></span><div><small>Касса</small><b id="cash">—</b></div></div>
+<div class="instrument"><span class="instrument-icon"><i data-icon="users"></i></span><div><small>Доставлено</small><b><span id="delivered">0</span><em id="target"></em></b></div></div>
+<div class="clock-box"><div><small id="period">Утро</small><b id="clock">06:00</b></div><div class="transport"><button id="play" aria-label="Начать смену" title="Начать смену"></button><button id="speed" title="Изменить скорость" aria-label="Скорость игры">1×</button></div></div>
+</div></section>
+<div class="workspace">
+<section class="map-card" aria-label="Карта трамвайной сети">
+<div class="panel-head map-head"><div class="panel-name"><i data-icon="map"></i><h2>План города</h2></div><button id="flow-toggle" class="layer-btn" aria-pressed="false"><i data-icon="flows"></i>Потоки</button></div>
+<div class="map-window" id="map-window">
+<div id="map-world"><canvas id="atlas" aria-hidden="true"></canvas><canvas id="transit" aria-hidden="true"></canvas><div id="map-targets"></div></div>
+<div class="map-scale"><span></span>200 м</div>
+<div id="map-tip" hidden></div>
+<div class="map-zoom"><button id="zoom-out" aria-label="Отдалить карту" title="Отдалить">−</button><button id="zoom-reset" title="Карта целиком" aria-label="Карта целиком"><i data-icon="fit"></i></button><button id="zoom-in" aria-label="Приблизить карту" title="Приблизить">+</button></div>
+</div>
+<div class="legend"><span><i class="legend-stop"></i>Остановка</span><span><i class="legend-site"></i>Место для остановки</span><span><i class="legend-tram"></i>Трамвай</span><span class="map-code" id="map-code"></span></div>
+</section>
+<aside class="dispatch" aria-label="Пульт управления">
+<section id="mission" class="mission"></section>
+<section class="controls"><div class="tabs" role="tablist" aria-label="Пульт управления"><button role="tab" id="tab-network" aria-selected="true"><i data-icon="route"></i>Линии</button><button role="tab" id="tab-demand" aria-selected="false"><i data-icon="users"></i>Спрос</button></div><div id="panel"></div></section>
+</aside></div>
+<section class="journal" aria-label="Журнал смены"><div class="journal-label"><i data-icon="radio"></i>Диспетчерская связь</div><time id="log-time">06:00</time><span id="log-line"></span><button id="logs" title="Открыть журнал" aria-label="Открыть журнал"><i data-icon="chevron"></i></button></section>
+<footer><span><i class="dot"></i><span id="save-status">Автосохранение</span></span><span>Трамвайное бюро · 1.0</span></footer>
+</main>
+<dialog id="dialog"><div id="dialog-content"></div></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+<!-- SCRIPT -->
+</body></html>

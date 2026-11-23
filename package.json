@@ -1,0 +1,12 @@
+{
+  "name": "tram-bureau",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "node scripts/serve.mjs",
+    "test": "node --test"
+  },
+  "devDependencies": {"esbuild": "0.28.2"}
+}

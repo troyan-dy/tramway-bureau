@@ -20,3 +20,62 @@ dialog{width:min(440px,calc(100% - 28px));max-height:85dvh;border:1px solid #a4a
 @media(max-width:560px){.mast-in,main{padding-inline:10px}.brand{font-size:19px;gap:6px}.brand-symbol,.brand-symbol svg{width:28px;height:29px}.mast-sub,.mast-divider,.head-btn span{display:none}.mast nav{gap:2px}.head-btn{min-width:32px}.mast-in{height:47px}.overview{flex-wrap:wrap;gap:9px;padding:13px 0 12px}.city-title h1{font-size:33px;line-height:1.1;letter-spacing:-1.6px}.eyebrow{font-size:8px}.city-title{flex-shrink:0}.instruments{gap:10px;flex:1;justify-content:flex-end}.instruments b{font-size:17px;letter-spacing:-.4px}.instruments small{font-size:9px;white-space:nowrap}.instruments em{font-size:10px}.clock-box{padding-left:8px;gap:4px;display:grid;grid-template-columns:auto;position:relative}.clock-box>div:first-child{display:flex;align-items:center;gap:4px;justify-content:center}.clock-box small{display:none}.clock-box b{font-size:15px}.transport{height:24px}.transport button{min-width:24px;font-size:10px}.transport #play svg{width:10px;height:10px}.instrument{gap:0}.workspace,.dispatch{gap:9px}.dispatch{grid-template-columns:1fr}.mission{padding:11px 14px}.mission h2{font-size:20px;margin:5px 0}.mission p{max-width:100%;font-size:12px}.mission .start{margin-top:7px}.map-window{aspect-ratio:1000/720}.site .site-label{font-size:8px;padding:0 2px;top:calc(50% + 6px)}.site-pin{width:10px;height:10px;font-size:9px}.site.built .site-pin{width:12px;height:12px;border-width:2.5px}.map-zoom{right:6px;bottom:6px}.map-zoom button{width:25px;height:23px}.legend{gap:9px;padding:5px 7px;min-height:30px}.legend>span{font-size:8px;gap:3px}.legend .map-code{display:none}.map-scale{left:7px;bottom:6px}.panel-head{height:39px;padding-inline:10px}.panel-name h2{font-size:17px}.layer-btn{min-height:25px;font-size:10px}.journal{gap:7px;align-items:center;padding:6px 8px}.journal-label{font-size:0;gap:0}.journal-label svg{width:17px;height:17px}.journal #log-line{font-size:10px}.journal time{padding-left:6px;font-size:10px}.section-sep{margin:10px 0}.depot{gap:15px}.tabs button{height:36px}.site{width:24px;height:24px}#map-tip{font-size:10px;top:5px;padding:4px 7px}}
 @media(max-width:355px){.city-title h1{font-size:27px}.instruments{gap:7px}.mast-in,main{padding-inline:7px}}
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}
+.map-buttons{display:flex;align-items:center;gap:12px}
+.mobile-jump,.tabs .mobile-jump,.map-edit-bar{display:none}
+.legend-person{position:relative;width:5px;height:7px;background:#507773;border-radius:2px;box-shadow:0 0 0 1px #f3e7c9}
+.legend-person:before{content:'';position:absolute;width:4px;height:4px;top:-3px;left:.5px;border-radius:50%;background:#e2b98c;border:1px solid #796951}
+.legend-arrow{color:#286d69;font-size:15px;line-height:1;font-style:normal}
+.mission-guide{color:#f7dab0;margin:8px 0 0 10px;font-size:11px;text-decoration:underline;text-underline-offset:3px}
+.forecast{background:#f5f0df;border:1px solid #c7c6b2;border-radius:6px;color:#324e44;overflow:hidden}
+.forecast-head{display:flex;align-items:center;gap:9px;padding:13px 16px 7px}
+.forecast-head svg{width:18px;color:#8c674a}
+.forecast h3{font:700 19px/1.2 var(--serif);letter-spacing:-.55px}
+.forecast-list{padding:1px 16px 10px}
+.forecast-row{display:grid;grid-template-columns:44px 11px 1fr;align-items:center;gap:8px;min-height:35px;position:relative}
+.forecast-row time{font:bold 12px var(--mono);font-variant-numeric:tabular-nums;color:#6c705d}
+.forecast-row i{position:relative;border:1.4px solid #8d9980;background:#f5f0df;width:8px;height:8px;border-radius:50%}
+.forecast-row:not(:last-child) i:after{content:'';position:absolute;top:6px;left:2px;width:1px;height:27px;background:#adb397}
+.forecast-row.current i{background:var(--rust);border-color:var(--rust)}
+.forecast-row.current time{color:#93472e}
+.forecast-row b{font-size:12px;font-weight:640}
+.forecast-row small{display:block;color:#697363;font-size:10px;margin:1px 0 2px}
+.district-order{border-top:1px dashed #b3b69e;padding:10px 16px 12px;background:#f9f5e8}
+.order-title,.report-order{display:flex;align-items:center;gap:6px}
+.order-title svg,.report-order svg{color:#9d663e;width:14px}
+.order-title b,.order-title strong{font-size:11px}
+.order-title strong{margin-left:auto;color:#52684f;font-family:var(--mono)}
+.district-order p{font-size:11px;line-height:1.5;margin-top:3px;color:#677060}
+.chart{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));align-items:end;gap:5px;padding:9px 3px 5px;margin:2px 0 11px;background:repeating-linear-gradient(0deg,transparent 0 16px,#e4e2d464 17px 18px);border-bottom:1px solid var(--edge)}
+.chart>div{display:flex;align-items:center;flex-direction:column;justify-content:end;gap:3px}
+.chart b{font:bold 10px var(--mono)}
+.chart i{display:block;width:min(70%,24px);background:#a86644;border-radius:2px 2px 0 0}
+.chart small{font:10px var(--mono);color:#637262}
+.report-order{margin:3px 0 11px;padding:7px 9px;background:#f0eddd;font-size:11px;gap:9px;border-left:2px solid #b88a59;line-height:1.45}
+.report-order b{font-size:12px}
+@media(max-width:800px){
+  .mobile-jump,.tabs .mobile-jump{display:inline-flex;align-items:center;justify-content:center;min-height:30px;color:#426357;font-size:11px;font-weight:550}
+  .tabs .mobile-jump{margin-left:auto;border:0;text-decoration:underline;text-underline-offset:3px}
+  .map-edit-bar{display:flex;align-items:center;gap:6px;padding:6px 8px;background:#e8eddf;border-bottom:1px solid var(--edge)}
+  .map-edit-bar span{margin-right:auto;font-size:11px;color:var(--teal)}
+  .map-edit-bar .primary,.map-edit-bar .quiet{min-height:30px;font-size:11px;padding:4px 7px}
+  .forecast{grid-column:1 / -1}
+  .forecast-list{display:flex;gap:18px;padding:6px 14px 10px}
+  .forecast-row{flex:1;display:flex;gap:5px;min-height:22px}
+  .forecast-row i:after{display:none}
+}
+@media(max-width:560px){
+  .forecast-head{padding:9px 12px 2px}
+  .forecast h3{font-size:17px}
+  .forecast-list{gap:7px;padding:5px 12px 8px}
+  .forecast-row{display:grid;align-content:start;grid-template-columns:9px 1fr;gap:3px}
+  .forecast-row i{grid-row:1;grid-column:1}
+  .forecast-row time{grid-column:2;font-size:10px}
+  .forecast-row>div{grid-column:1 / -1;line-height:1.1}
+  .forecast-row b{font-size:10px}
+  .forecast-row small{display:none}
+  .district-order{padding:7px 12px}
+  .legend>span{font-size:9px}
+  .legend{gap:8px;min-height:31px}
+  .transport{height:29px}
+  .transport button{min-width:30px}
+}

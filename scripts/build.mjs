@@ -9,11 +9,15 @@ const bundle = (entry) => build({
   minify: true, target: 'es2020', format: 'iife', charset: 'utf8',
   loader: {'.woff2': 'dataurl'}, legalComments: 'none',
 }).then(output => output.outputFiles[0].text);
-const [template, js, css] = await Promise.all([
-  readFile(path.join(root, 'src/shell.html'), 'utf8'),
-  bundle('src/app.js'), bundle('src/style.css')
+const readText = async file =>
+  (await readFile(path.join(root, file), 'utf8')).replace(/\r\n/g, '\n');
+const [template, js, css, interLicense, ptLicense] = await Promise.all([
+  readText('src/shell.html'), bundle('src/app.js'), bundle('src/style.css'),
+  readText('assets/inter-LICENSE.txt'), readText('assets/ptserif-LICENSE.txt'),
 ]);
-const html = template.replace('<!-- STYLE -->', () => '<style>' + css + '</style>')
+const credits = '<script type="text/plain" id="font-licenses">\nInter\n' + interLicense +
+  '\nPT Serif\n' + ptLicense + '\n</script>';
+const html = template.replace('<!-- STYLE -->', () => '<style>' + css + '</style>\n' + credits)
   .replace('<!-- SCRIPT -->', () => '<script>' + js.replace(/<\/script/gi,'<\\/script') + '</script>');
 await mkdir(path.join(root, 'dist'), {recursive: true});
 await writeFile(path.join(root, 'dist/index.html'), html);

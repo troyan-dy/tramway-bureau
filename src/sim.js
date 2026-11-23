@@ -645,7 +645,9 @@ function validSave(g) {
 export function restoreGame(data) {
   try {
     const g = JSON.parse(typeof data === 'string' ? data : JSON.stringify(data));
-    return validSave(g) ? g : null;
+    if (!validSave(g)) return null;
+    g.brief.name = g.sites[g.brief.site].name;
+    return g;
   } catch {
     return null;
   }
